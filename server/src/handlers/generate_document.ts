@@ -92,7 +92,7 @@ const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 2, // Changed from 0 to 2
     maximumFractionDigits: 2
   }).format(amount);
 };

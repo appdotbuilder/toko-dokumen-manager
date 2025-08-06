@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -327,13 +327,11 @@ function App() {
   };
 
   // Document Generation
-  const handleGenerateDocument = async (documentType: DocumentType) => {
-    if (!selectedTransaction) return;
-
+  const handleGenerateDocument = async (transactionId: number, documentType: DocumentType, openPreview: boolean) => {
     setIsLoading(true);
     try {
       const documentData: GenerateDocumentInput = {
-        transaction_id: selectedTransaction.transaction.id,
+        transaction_id: transactionId,
         document_type: documentType,
         override_date: null,
         document_city: null,
@@ -342,10 +340,42 @@ function App() {
       };
 
       const response = await trpc.generateDocument.mutate(documentData);
-      setDocumentPreview({ html: response.html_content, type: documentType });
-      setShowDocumentDialog(true);
+      
+      if (openPreview) {
+        setDocumentPreview({ html: response.html_content, type: documentType });
+        setShowDocumentDialog(true);
+      } else {
+        await handleDownloadPdf(response.html_content, documentType, transactionId);
+      }
     } catch (error) {
       console.error('Failed to generate document:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Download All Documents
+  const handleDownloadAllDocuments = async (transactionId: number) => {
+    setIsLoading(true);
+    try {
+      for (const docType of documentTypes) {
+        const documentData: GenerateDocumentInput = {
+          transaction_id: transactionId,
+          document_type: docType.value,
+          override_date: null,
+          document_city: null,
+          courier_signer_name: null,
+          receiver_signer_name: null
+        };
+        
+        const response = await trpc.generateDocument.mutate(documentData);
+        await handleDownloadPdf(response.html_content, docType.value, transactionId);
+        
+        // Add small delay between downloads to prevent browser blocking
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (error) {
+      console.error('Failed to download all documents:', error);
     } finally {
       setIsLoading(false);
     }
@@ -379,7 +409,7 @@ function App() {
   }, []);
 
   // PDF Download Function
-  const handleDownloadPdf = async (htmlContent: string) => {
+  const handleDownloadPdf = async (htmlContent: string, documentType: DocumentType, transactionId: number) => {
     try {
       // Try to load html2pdf library first
       await loadHtml2PdfScript();
@@ -393,7 +423,7 @@ function App() {
         
         const options = {
           margin: 0.5,
-          filename: `${documentPreview?.type || 'document'}_${selectedTransaction?.transaction.transaction_id || 'doc'}.pdf`,
+          filename: `${documentType.replace('_', '-')}-${transactionId}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true },
           jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
@@ -414,7 +444,7 @@ function App() {
           <html>
           <head>
             <meta charset="UTF-8">
-            <title>Document - ${selectedTransaction?.transaction.transaction_id || 'doc'}</title>
+            <title>${documentType.replace('_', '-')}-${transactionId}</title>
             <style>
               @media screen {
                 body { font-family: Arial, sans-serif; margin: 20px; }
@@ -1072,79 +1102,73 @@ function App() {
                         </div>
                       </div>
 
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditTransaction(transaction)}
-                        >
-                          <Edit className="w-4 h-4 mr-2" />
-                          Edit
-                        </Button>
-                        
-                        <Dialog>
-                          <DialogTrigger asChild>
+                      <div className="space-y-3">
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditTransaction(transaction)}
+                          >
+                            <Edit className="w-4 h-4 mr-2" />
+                            Edit
+                          </Button>
+                          
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Hapus
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Hapus Transaksi</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Apakah Anda yakin ingin menghapus transaksi {transaction.transaction_id}? 
+                                  Tindakan ini tidak dapat dibatalkan.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Batal</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteTransaction(transaction.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Hapus
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+
+                        {/* Document Preview Buttons */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {documentTypes.map((docType) => (
                             <Button
+                              key={docType.value}
                               variant="outline"
                               size="sm"
-                              onClick={() => setSelectedTransaction({ transaction, items: [] })}
+                              onClick={() => handleGenerateDocument(transaction.id, docType.value, true)}
+                              disabled={isLoading}
+                              className="text-xs"
                             >
-                              <FileText className="w-4 h-4 mr-2" />
-                              Dokumen
+                              <FileText className="w-3 h-3 mr-1" />
+                              {docType.label}
                             </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle>Generate Dokumen</DialogTitle>
-                              <DialogDescription>
-                                Pilih jenis dokumen yang ingin dibuat untuk transaksi {transaction.transaction_id}
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="grid grid-cols-2 gap-3">
-                              {documentTypes.map((docType) => (
-                                <Button
-                                  key={docType.value}
-                                  variant="outline"
-                                  onClick={() => handleGenerateDocument(docType.value)}
-                                  disabled={isLoading}
-                                  className="h-auto py-3"
-                                >
-                                  <div className="text-center">
-                                    <FileText className="w-6 h-6 mx-auto mb-1" />
-                                    <span className="text-sm">{docType.label}</span>
-                                  </div>
-                                </Button>
-                              ))}
-                            </div>
-                          </DialogContent>
-                        </Dialog>
+                          ))}
+                        </div>
 
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Hapus
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Hapus Transaksi</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Apakah Anda yakin ingin menghapus transaksi {transaction.transaction_id}? 
-                                Tindakan ini tidak dapat dibatalkan.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Batal</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteTransaction(transaction.id)}
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                Hapus
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        {/* Download All PDF Button */}
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => handleDownloadAllDocuments(transaction.id)}
+                          disabled={isLoading}
+                          className="w-full"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          {isLoading ? 'Mengunduh...' : 'Unduh Semua PDF'}
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -1165,7 +1189,7 @@ function App() {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={() => documentPreview && handleDownloadPdf(documentPreview.html)}
+                  onClick={() => documentPreview && selectedTransaction && handleDownloadPdf(documentPreview.html, documentPreview.type, selectedTransaction.transaction.id)}
                   disabled={!documentPreview}
                 >
                   <Download className="w-4 h-4 mr-2" />
