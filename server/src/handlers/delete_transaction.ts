@@ -1,7 +1,26 @@
 
+import { db } from '../db';
+import { transactionsTable, transactionItemsTable } from '../db/schema';
+import { eq } from 'drizzle-orm';
+
 export const deleteTransaction = async (id: number): Promise<{ success: boolean }> => {
-  // This is a placeholder declaration! Real code should be implemented here.
-  // The goal of this handler is deleting a transaction and its related items from the database.
-  // Should use transaction to ensure both transaction and items are deleted atomically.
-  return Promise.resolve({ success: true });
+  try {
+    // Use database transaction to ensure atomicity
+    await db.transaction(async (tx) => {
+      // Delete all related transaction items first (due to foreign key constraint)
+      await tx.delete(transactionItemsTable)
+        .where(eq(transactionItemsTable.transaction_id, id))
+        .execute();
+
+      // Delete the transaction
+      await tx.delete(transactionsTable)
+        .where(eq(transactionsTable.id, id))
+        .execute();
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Transaction deletion failed:', error);
+    throw error;
+  }
 };
