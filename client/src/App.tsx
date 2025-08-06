@@ -30,8 +30,8 @@ const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(amount);
 };
 
@@ -348,6 +348,110 @@ function App() {
       console.error('Failed to generate document:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Load html2pdf library dynamically
+  const loadHtml2PdfScript = useCallback((): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      // Check if already loaded
+      if ((window as { html2pdf?: unknown }).html2pdf) {
+        resolve();
+        return;
+      }
+
+      // Check if script is already in DOM
+      const existingScript = document.querySelector('script[src*="html2pdf"]');
+      if (existingScript) {
+        existingScript.addEventListener('load', () => resolve());
+        existingScript.addEventListener('error', reject);
+        return;
+      }
+
+      // Create and load script
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      script.crossOrigin = 'anonymous';
+      script.onload = () => resolve();
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }, []);
+
+  // PDF Download Function
+  const handleDownloadPdf = async (htmlContent: string) => {
+    try {
+      // Try to load html2pdf library first
+      await loadHtml2PdfScript();
+      
+      const html2pdf = (window as { html2pdf?: { (): { set: (options: object) => { from: (element: HTMLElement) => { save: () => Promise<void> } } } } }).html2pdf;
+      
+      if (html2pdf) {
+        // Use html2pdf library for better PDF generation
+        const element = document.createElement('div');
+        element.innerHTML = htmlContent;
+        
+        const options = {
+          margin: 0.5,
+          filename: `${documentPreview?.type || 'document'}_${selectedTransaction?.transaction.transaction_id || 'doc'}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true },
+          jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+        };
+        
+        await html2pdf().set(options).from(element).save();
+      } else {
+        throw new Error('html2pdf library not available');
+      }
+    } catch (error) {
+      console.error('Failed to load html2pdf, using fallback:', error);
+      
+      // Fallback: Create a new window with the HTML content for printing
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Document - ${selectedTransaction?.transaction.transaction_id || 'doc'}</title>
+            <style>
+              @media screen {
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .print-button { 
+                  position: fixed; 
+                  top: 10px; 
+                  right: 10px; 
+                  background: #007bff; 
+                  color: white; 
+                  border: none; 
+                  padding: 10px 20px; 
+                  border-radius: 5px; 
+                  cursor: pointer;
+                  z-index: 1000;
+                }
+              }
+              @media print {
+                body { margin: 0; padding: 20px; }
+                @page { margin: 0.5in; }
+                .print-button { display: none; }
+              }
+              ${htmlContent.includes('<style>') 
+                ? htmlContent.match(/<style[^>]*>([\s\S]*?)<\/style>/)?.[1] || '' 
+                : ''
+              }
+            </style>
+          </head>
+          <body>
+            <button class="print-button" onclick="window.print()">Print / Save as PDF</button>
+            ${htmlContent.replace(/<style[^>]*>[\s\S]*?<\/style>/g, '')}
+          </body>
+          </html>
+        `);
+        printWindow.document.close();
+      } else {
+        alert('Tidak dapat membuka jendela baru. Silakan periksa pengaturan pop-up browser Anda.');
+      }
     }
   };
 
@@ -1058,7 +1162,12 @@ function App() {
             <DialogTitle className="flex items-center justify-between">
               <span>Preview Dokumen</span>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => documentPreview && handleDownloadPdf(documentPreview.html)}
+                  disabled={!documentPreview}
+                >
                   <Download className="w-4 h-4 mr-2" />
                   Download PDF
                 </Button>

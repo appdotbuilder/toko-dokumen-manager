@@ -137,7 +137,7 @@ describe('generateDocument', () => {
     expect(result.html_content).toContain('Test Item 1');
     expect(result.html_content).toContain('PPN');
     // Use regex to match currency with possible whitespace variations
-    expect(result.html_content).toMatch(/Total:\s*Rp\s+111\.000/);
+    expect(result.html_content).toMatch(/Total:\s*Rp\s+111\.000,00/);
   });
 
   it('should generate kwitansi document with custom signer', async () => {
@@ -158,7 +158,7 @@ describe('generateDocument', () => {
     expect(result.html_content).toContain('Custom Signer');
     expect(result.html_content).toContain('Terbilang:');
     // Use regex to match currency in the specific context
-    expect(result.html_content).toMatch(/Uang sejumlah:\s*<strong>Rp\s+111\.000<\/strong>/);
+    expect(result.html_content).toMatch(/Uang sejumlah:\s*<strong>Rp\s+111\.000,00<\/strong>/);
     expect(result.html_content).toContain('SD Test School');
   });
 
@@ -181,7 +181,7 @@ describe('generateDocument', () => {
     expect(result.html_content).toContain('NPWP: 98.765.432.1-012.000');
     expect(result.html_content).toContain('PPN (11%)');
     // Use regex for the styled total
-    expect(result.html_content).toMatch(/Total:\s*Rp\s+111\.000/);
+    expect(result.html_content).toMatch(/Total:\s*Rp\s+111\.000,00/);
   });
 
   it('should generate BAST document', async () => {
@@ -224,7 +224,7 @@ describe('generateDocument', () => {
     expect(result.html_content).toContain('Kepada Yth');
     expect(result.html_content).toContain('SD Test School');
     // Use regex to match the specific format in surat pesanan
-    expect(result.html_content).toMatch(/Total Pesanan:\s*Rp\s+111\.000/);
+    expect(result.html_content).toMatch(/Total Pesanan:\s*Rp\s+111\.000,00/);
     expect(result.html_content).toContain('Bagian Pembelian');
     expect(result.html_content).toContain('Test Item 1');
     expect(result.html_content).toContain('Test Item 2');
@@ -273,7 +273,7 @@ describe('generateDocument', () => {
     expect(result.html_content).toContain('Valid until:');
     expect(result.html_content).toContain('Terms & Conditions');
     // Use regex for the estimated total
-    expect(result.html_content).toMatch(/Estimated Total:\s*Rp\s+111\.000/);
+    expect(result.html_content).toMatch(/Estimated Total:\s*Rp\s+111\.000,00/);
     expect(result.html_content).toContain('PROF-TXN-001');
   });
 
@@ -341,7 +341,7 @@ describe('generateDocument', () => {
     expect(result.html_content).not.toContain('PPh 22');
     expect(result.html_content).not.toContain('PPh 23');
     // Use regex for the total without tax
-    expect(result.html_content).toMatch(/Total:\s*Rp\s+100\.000/);
+    expect(result.html_content).toMatch(/Total:\s*Rp\s+100\.000,00/);
   });
 
   it('should handle transaction with materai requirement', async () => {
@@ -398,9 +398,9 @@ describe('generateDocument', () => {
 
     // Should contain properly formatted Indonesian currency
     expect(result.html_content).toContain('Rp');
-    expect(result.html_content).toMatch(/Rp\s+111\.000/); // Total amount
-    expect(result.html_content).toMatch(/Rp\s+100\.000/); // Subtotal
-    expect(result.html_content).toMatch(/Rp\s+11\.000/);  // PPN amount
+    expect(result.html_content).toMatch(/Rp\s+111\.000,00/); // Total amount
+    expect(result.html_content).toMatch(/Rp\s+100\.000,00/); // Subtotal
+    expect(result.html_content).toMatch(/Rp\s+11\.000,00/);  // PPN amount
   });
 
   it('should format Indonesian dates correctly', async () => {
